@@ -1,28 +1,5 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { Upload, Download, FileText, Users, MapPin, ShoppingCart, FileCheck, AlertCircle, CheckCircle, Globe, Zap, Database, Settings, ArrowRight, X } from 'lucide-react';
-
-const STORAGE_KEY = 'templateFieldMappings';
-const TEMPLATE_CONFIG_KEY = 'templateConfig';
-
-const saveToLocalStorage = (key, data) => {
-  try {
-    localStorage.setItem(key, JSON.stringify(data));
-    return true;
-  } catch (error) {
-    console.error('Error saving to localStorage:', error);
-    return false;
-  }
-};
-
-const loadFromLocalStorage = (key) => {
-  try {
-    const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : null;
-  } catch (error) {
-    console.error('Error loading from localStorage:', error);
-    return null;
-  }
-};
+import React, { useState, useCallback } from 'react';
+import { Upload, Download, FileText, Users, MapPin, ShoppingCart, FileCheck, AlertCircle, CheckCircle, Globe, Zap, Database, Settings } from 'lucide-react';
 
 const EnterpriseDataMappingApp = () => {
   // Core state management
@@ -38,252 +15,70 @@ const EnterpriseDataMappingApp = () => {
   
   // Template configuration state
   const [showTemplateConfig, setShowTemplateConfig] = useState(false);
-  const [showTemplateEditor, setShowTemplateEditor] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState(null);
-  const [templateMappings, setTemplateMappings] = useState({});
+  const [templateConfig, setTemplateConfig] = useState({
+    customer: { enabled: true, fields: {} },
+    location: { enabled: true, fields: {} },
+    order: { enabled: true, fields: {} },
+    contract: { enabled: true, fields: {} }
+  });
+  const [availableFields, setAvailableFields] = useState([]);
   const [fileFields, setFileFields] = useState({
     commissions: [],
     orders: []
   });
-  const [enabledTemplates, setEnabledTemplates] = useState({
-    customer: true,
-    location: true,
-    order: true,
-    contract: true
+  const [expandedTemplates, setExpandedTemplates] = useState({
+    customer: false,
+    location: false,
+    order: false,
+    contract: false
   });
-  const [customTemplateRequirements, setCustomTemplateRequirements] = useState(null);
-  
-  // Template editor form state
-  const [newFieldName, setNewFieldName] = useState('');
-  const [newFieldDescription, setNewFieldDescription] = useState('');
-  const [newFieldType, setNewFieldType] = useState('optional');
-  const [editingField, setEditingField] = useState(null);
-  const [editFieldName, setEditFieldName] = useState('');
-  const [editFieldDescription, setEditFieldDescription] = useState('');
-  const [templateName, setTemplateName] = useState('');
-  const [templateDescription, setTemplateDescription] = useState('');
 
-  // Default template field requirements - what each template actually needs
-  const defaultTemplateRequirements = {
-    customer: {
-      name: 'Customer Template',
-      icon: Users,
-      color: 'blue',
-      description: 'Customer master data for CRM and billing systems',
-      required: [
-        { field: 'CustomerID', description: 'Unique customer identifier' },
-        { field: 'CustomerName', description: 'Full customer name or company' },
-        { field: 'AccountNumber', description: 'Account/billing number' }
-      ],
-      optional: [
-        { field: 'Address', description: 'Customer address' },
-        { field: 'City', description: 'Customer city' },
-        { field: 'State', description: 'Customer state/province' },
-        { field: 'ZIP', description: 'Postal/ZIP code' },
-        { field: 'Phone', description: 'Primary phone number' },
-        { field: 'Email', description: 'Primary email address' },
-        { field: 'Industry', description: 'Customer industry/vertical' },
-        { field: 'Territory', description: 'Sales territory' },
-        { field: 'Rep', description: 'Sales representative' },
-        { field: 'Status', description: 'Customer status' }
-      ]
-    },
-    location: {
-      name: 'Location Template',
-      icon: MapPin,
-      color: 'green',
-      description: 'Service location and installation data',
-      required: [
-        { field: 'LocationID', description: 'Unique location identifier' },
-        { field: 'CustomerID', description: 'Associated customer ID' },
-        { field: 'ServiceAddress', description: 'Service installation address' }
-      ],
-      optional: [
-        { field: 'LocationName', description: 'Location name/description' },
-        { field: 'City', description: 'Service city' },
-        { field: 'State', description: 'Service state/province' },
-        { field: 'ZIP', description: 'Service postal code' },
-        { field: 'Country', description: 'Service country' },
-        { field: 'TimeZone', description: 'Location time zone' },
-        { field: 'ServiceType', description: 'Type of service provided' },
-        { field: 'InstallDate', description: 'Installation date' },
-        { field: 'Coordinates', description: 'GPS coordinates' },
-        { field: 'AccessNotes', description: 'Installation access notes' }
-      ]
-    },
-    order: {
-      name: 'Order Template',
-      icon: ShoppingCart,
-      color: 'purple',
-      description: 'Order processing and fulfillment data',
-      required: [
-        { field: 'OrderID', description: 'Unique order identifier' },
-        { field: 'CustomerID', description: 'Associated customer ID' },
-        { field: 'OrderDate', description: 'Order placement date' }
-      ],
-      optional: [
-        { field: 'Product', description: 'Product or service ordered' },
-        { field: 'Quantity', description: 'Order quantity' },
-        { field: 'UnitPrice', description: 'Price per unit' },
-        { field: 'TotalAmount', description: 'Total order amount' },
-        { field: 'MRC', description: 'Monthly recurring charge' },
-        { field: 'NRC', description: 'Non-recurring charge' },
-        { field: 'Status', description: 'Order status' },
-        { field: 'Rep', description: 'Sales representative' },
-        { field: 'Commission', description: 'Commission amount' },
-        { field: 'Provider', description: 'Service provider' },
-        { field: 'Terms', description: 'Contract terms' }
-      ]
-    },
-    contract: {
-      name: 'Contract Template',
-      icon: FileText,
-      color: 'orange',
-      description: 'Contract and agreement management data',
-      required: [
-        { field: 'ContractID', description: 'Unique contract identifier' },
-        { field: 'CustomerID', description: 'Associated customer ID' },
-        { field: 'StartDate', description: 'Contract start date' }
-      ],
-      optional: [
-        { field: 'EndDate', description: 'Contract end date' },
-        { field: 'Terms', description: 'Contract term length' },
-        { field: 'MRC', description: 'Monthly recurring revenue' },
-        { field: 'TotalValue', description: 'Total contract value' },
-        { field: 'AutoRenewal', description: 'Auto-renewal terms' },
-        { field: 'PenaltyClause', description: 'Early termination penalty' },
-        { field: 'ServiceLevel', description: 'Service level agreement' },
-        { field: 'BillingCycle', description: 'Billing frequency' },
-        { field: 'PaymentTerms', description: 'Payment terms' },
-        { field: 'Rep', description: 'Account representative' },
-        { field: 'Commission', description: 'Commission structure' }
-      ]
-    }
-  };
-
-  // Get current template requirements (custom or default)
-  const templateRequirements = customTemplateRequirements || defaultTemplateRequirements;
-
-  // Template editor functions
-  const openTemplateEditor = useCallback((templateType) => {
-    setEditingTemplate(templateType);
-    const template = (customTemplateRequirements || defaultTemplateRequirements)[templateType];
-    setTemplateName(template?.name || '');
-    setTemplateDescription(template?.description || '');
-    setNewFieldName('');
-    setNewFieldDescription('');
-    setNewFieldType('optional');
-    setEditingField(null);
-    setShowTemplateEditor(true);
-  }, [customTemplateRequirements, defaultTemplateRequirements]);
-
-  const addTemplateField = useCallback((templateType, fieldType, fieldName, description) => {
-    if (!fieldName.trim()) return;
+  // Dynamic template definitions based on uploaded files
+  const getTemplateDefinitions = useCallback(() => {
+    const commissionFields = fileFields.commissions || [];
+    const orderFields = fileFields.orders || [];
+    const allFields = [...new Set([...commissionFields, ...orderFields])];
     
-    setCustomTemplateRequirements(prev => {
-      const current = prev || { ...defaultTemplateRequirements };
-      const template = { ...current[templateType] };
-      const targetArray = fieldType === 'required' ? template.required : template.optional;
-      
-      // Check if field already exists
-      const existsInRequired = template.required.some(f => f.field === fieldName);
-      const existsInOptional = template.optional.some(f => f.field === fieldName);
-      
-      if (existsInRequired || existsInOptional) {
-        alert('Field already exists in this template');
-        return prev;
+    // Create prefixed versions for cross-file mapping
+    const commissionPrefixed = commissionFields.map(field => `commission_${field}`);
+    const orderPrefixed = orderFields.map(field => `order_${field}`);
+    const allFieldsWithPrefixed = [...allFields, ...commissionPrefixed, ...orderPrefixed];
+
+    return {
+      customer: {
+        name: 'Customer Template',
+        icon: Users,
+        color: 'blue',
+        fields: allFieldsWithPrefixed,
+        required: [],
+        defaultSelected: commissionFields.slice(0, 8) // First 8 commission fields
+      },
+      location: {
+        name: 'Location Template',
+        icon: MapPin,
+        color: 'green',
+        fields: allFieldsWithPrefixed,
+        required: [],
+        defaultSelected: [...commissionFields.slice(0, 4), ...orderFields.slice(0, 4)] // Mix of both
+      },
+      order: {
+        name: 'Order Template',
+        icon: ShoppingCart,
+        color: 'purple',
+        fields: allFieldsWithPrefixed,
+        required: [],
+        defaultSelected: orderFields.slice(0, 8) // First 8 order fields
+      },
+      contract: {
+        name: 'Contract Template',
+        icon: FileText,
+        color: 'orange',
+        fields: allFieldsWithPrefixed,
+        required: [],
+        defaultSelected: [...commissionFields.slice(0, 4), ...orderFields.slice(0, 4)] // Mix of both
       }
-      
-      const newField = { field: fieldName, description: description || `${fieldName} field` };
-      
-      return {
-        ...current,
-        [templateType]: {
-          ...template,
-          [fieldType]: [...targetArray, newField]
-        }
-      };
-    });
-  }, [defaultTemplateRequirements]);
-
-  const removeTemplateField = useCallback((templateType, fieldType, fieldName) => {
-    setCustomTemplateRequirements(prev => {
-      const current = prev || { ...defaultTemplateRequirements };
-      const template = { ...current[templateType] };
-      
-      return {
-        ...current,
-        [templateType]: {
-          ...template,
-          [fieldType]: template[fieldType].filter(f => f.field !== fieldName)
-        }
-      };
-    });
-  }, [defaultTemplateRequirements]);
-
-  const updateTemplateField = useCallback((templateType, fieldType, oldFieldName, newFieldName, newDescription) => {
-    setCustomTemplateRequirements(prev => {
-      const current = prev || { ...defaultTemplateRequirements };
-      const template = { ...current[templateType] };
-      
-      return {
-        ...current,
-        [templateType]: {
-          ...template,
-          [fieldType]: template[fieldType].map(f => 
-            f.field === oldFieldName 
-              ? { field: newFieldName, description: newDescription }
-              : f
-          )
-        }
-      };
-    });
-  }, [defaultTemplateRequirements]);
-
-  const moveFieldBetweenTypes = useCallback((templateType, fieldName, fromType, toType) => {
-    setCustomTemplateRequirements(prev => {
-      const current = prev || { ...defaultTemplateRequirements };
-      const template = { ...current[templateType] };
-      
-      const field = template[fromType].find(f => f.field === fieldName);
-      if (!field) return prev;
-      
-      return {
-        ...current,
-        [templateType]: {
-          ...template,
-          [fromType]: template[fromType].filter(f => f.field !== fieldName),
-          [toType]: [...template[toType], field]
-        }
-      };
-    });
-  }, [defaultTemplateRequirements]);
-
-  const resetTemplateToDefault = useCallback((templateType) => {
-    setCustomTemplateRequirements(prev => {
-      const current = prev || { ...defaultTemplateRequirements };
-      
-      return {
-        ...current,
-        [templateType]: { ...defaultTemplateRequirements[templateType] }
-      };
-    });
-  }, [defaultTemplateRequirements]);
-
-  const updateTemplateInfo = useCallback((templateType, name, description) => {
-    setCustomTemplateRequirements(prev => {
-      const current = prev || { ...defaultTemplateRequirements };
-      
-      return {
-        ...current,
-        [templateType]: {
-          ...current[templateType],
-          name: name,
-          description: description
-        }
-      };
-    });
-  }, [defaultTemplateRequirements]);
+    };
+  }, [fileFields]);
 
   // System pattern definitions for auto-detection
   const systemPatterns = {
@@ -403,82 +198,77 @@ const EnterpriseDataMappingApp = () => {
     return colorMap[color] || colorMap.blue;
   };
 
-  // Auto-mapping logic based on field name similarity
-  const getAutoMappingSuggestions = useCallback((templateField, availableFields) => {
-    const suggestions = [];
-    const fieldLower = templateField.toLowerCase();
+  // Template configuration utilities
+  const initializeTemplateConfig = useCallback(() => {
+    const templateDefinitions = getTemplateDefinitions();
+    const config = {};
     
-    // Direct matches
-    availableFields.forEach(sourceField => {
-      const sourceLower = sourceField.toLowerCase();
-      if (sourceLower === fieldLower) {
-        suggestions.push({ field: sourceField, confidence: 100, reason: 'Exact match' });
-      } else if (sourceLower.includes(fieldLower) || fieldLower.includes(sourceLower)) {
-        suggestions.push({ field: sourceField, confidence: 80, reason: 'Partial match' });
-      }
-    });
-
-    // Pattern-based matches
-    const patterns = {
-      'customerid': ['customer', 'cust', 'client', 'account'],
-      'customername': ['custfname', 'custlname', 'customer name', 'client name'],
-      'accountnumber': ['account', 'acct', 'accountnbr', 'account number'],
-      'orderid': ['order', 'order id', 'order number', 'rpm order'],
-      'orderdate': ['date', 'order date', 'commission date', 'commdate'],
-      'rep': ['rep', 'sales', 'seller', 'advisor', 'agent'],
-      'commission': ['commission', 'comm', 'comp paid', 'sales comm'],
-      'mrc': ['mrc', 'monthly', 'recurring', 'net billed'],
-      'product': ['product', 'service', 'provider', 'supplier'],
-      'address': ['address', 'addr', 'location'],
-      'phone': ['phone', 'tel', 'telephone'],
-      'email': ['email', 'mail']
-    };
-
-    const fieldPatterns = patterns[fieldLower] || [];
-    availableFields.forEach(sourceField => {
-      const sourceLower = sourceField.toLowerCase();
-      fieldPatterns.forEach(pattern => {
-        if (sourceLower.includes(pattern) && !suggestions.some(s => s.field === sourceField)) {
-          suggestions.push({ field: sourceField, confidence: 60, reason: `Pattern match: ${pattern}` });
-        }
+    Object.entries(templateDefinitions).forEach(([templateType, definition]) => {
+      config[templateType] = {
+        enabled: true,
+        fields: {}
+      };
+      
+      definition.fields.forEach(field => {
+        config[templateType].fields[field] = {
+          selected: definition.defaultSelected.includes(field),
+          required: definition.required.includes(field),
+          mappedTo: field
+        };
       });
     });
+    
+    setTemplateConfig(config);
+  }, [getTemplateDefinitions]);
 
-    return suggestions.sort((a, b) => b.confidence - a.confidence).slice(0, 3);
+  const toggleTemplateExpanded = useCallback((templateType) => {
+    setExpandedTemplates(prev => ({
+      ...prev,
+      [templateType]: !prev[templateType]
+    }));
   }, []);
 
-  // Initialize template mappings with auto-suggestions
-  const initializeTemplateMappings = useCallback(() => {
-    const allFields = [...fileFields.commissions, ...fileFields.orders];
-    const mappings = {};
-    
-    Object.keys(templateRequirements).forEach(templateType => {
-      mappings[templateType] = {};
-      const template = templateRequirements[templateType];
-      
-      [...template.required, ...template.optional].forEach(fieldDef => {
-        const suggestions = getAutoMappingSuggestions(fieldDef.field, allFields);
-        mappings[templateType][fieldDef.field] = {
-          sourceField: suggestions.length > 0 ? suggestions[0].field : '',
-          sourceFile: '',
-          suggestions: suggestions,
-          enabled: template.required.some(req => req.field === fieldDef.field) // Enable required fields by default
-        };
-        
-        // Set source file if we have a mapping
-        if (suggestions.length > 0) {
-          const sourceField = suggestions[0].field;
-          if (fileFields.commissions.includes(sourceField)) {
-            mappings[templateType][fieldDef.field].sourceFile = 'commissions';
-          } else if (fileFields.orders.includes(sourceField)) {
-            mappings[templateType][fieldDef.field].sourceFile = 'orders';
+  const toggleTemplateEnabled = useCallback((templateType) => {
+    setTemplateConfig(prev => ({
+      ...prev,
+      [templateType]: {
+        ...prev[templateType],
+        enabled: !prev[templateType].enabled
+      }
+    }));
+  }, []);
+
+  const toggleFieldSelected = useCallback((templateType, fieldName) => {
+    setTemplateConfig(prev => ({
+      ...prev,
+      [templateType]: {
+        ...prev[templateType],
+        fields: {
+          ...prev[templateType].fields,
+          [fieldName]: {
+            ...prev[templateType].fields[fieldName],
+            selected: !prev[templateType].fields[fieldName].selected
           }
         }
-      });
-    });
-    
-    setTemplateMappings(mappings);
-  }, [fileFields, getAutoMappingSuggestions]);
+      }
+    }));
+  }, []);
+
+  const updateFieldMapping = useCallback((templateType, fieldName, mappedTo) => {
+    setTemplateConfig(prev => ({
+      ...prev,
+      [templateType]: {
+        ...prev[templateType],
+        fields: {
+          ...prev[templateType].fields,
+          [fieldName]: {
+            ...prev[templateType].fields[fieldName],
+            mappedTo: mappedTo
+          }
+        }
+      }
+    }));
+  }, []);
 
   // System detection logic
   const detectSystemType = useCallback((commissionHeaders, orderHeaders) => {
@@ -488,20 +278,31 @@ const EnterpriseDataMappingApp = () => {
       let score = 0;
       let totalFields = config.commissionFields.length + config.orderFields.length;
       
+      // Check commission field matches
       const commissionMatches = config.commissionFields.filter(field => 
         commissionHeaders.some(header => header.toLowerCase().includes(field.toLowerCase()))
       ).length;
       
+      // Check order field matches  
       const orderMatches = config.orderFields.filter(field => 
         orderHeaders.some(header => header.toLowerCase().includes(field.toLowerCase()))
       ).length;
       
+      // Calculate score as percentage of matching fields
       score = (commissionMatches + orderMatches) / totalFields;
       
+      // Require at least 50% field match and at least 2 total matches
       if (score >= 0.5 && (commissionMatches + orderMatches) >= 2 && score > bestMatch.score) {
         bestMatch = { system: systemKey, score };
       }
     }
+    
+    // Log detection details for debugging
+    console.log('System Detection Results:', {
+      commissionHeaders: commissionHeaders.slice(0, 10),
+      orderHeaders: orderHeaders.slice(0, 10),
+      bestMatch
+    });
     
     return bestMatch.system;
   }, []);
@@ -513,6 +314,7 @@ const EnterpriseDataMappingApp = () => {
       setFiles(prev => ({ ...prev, [fileType]: file }));
       addLog(`Uploaded ${fileType} file: ${file.name}`, 'success');
       
+      // Analyze file fields immediately upon upload
       try {
         const text = await file.text();
         const lines = text.split('\n').filter(line => line.trim());
@@ -524,11 +326,13 @@ const EnterpriseDataMappingApp = () => {
               [fileType]: headers
             };
             
+            // Check if we have both files uploaded and can detect system
             const updatedFiles = fileType === 'commissions' ? 
               { ...files, commissions: file } : 
               { ...files, orders: file };
             
             if (updatedFiles.commissions && updatedFiles.orders && newFileFields.commissions.length > 0 && newFileFields.orders.length > 0) {
+              // Detect system type based on field headers
               const commissionHeaders = fileType === 'commissions' ? headers : newFileFields.commissions;
               const orderHeaders = fileType === 'orders' ? headers : newFileFields.orders;
               
@@ -536,7 +340,7 @@ const EnterpriseDataMappingApp = () => {
               setDetectedSystem(systemType);
               
               const systemName = systemPatterns[systemType]?.name || 'Generic System';
-              addLog(`System detected: ${systemName} - Template mapping suggestions generated`, 'success');
+              addLog(`System detected: ${systemName} - Cross-file mapping rules applied`, 'success');
             }
             
             return newFileFields;
@@ -583,38 +387,67 @@ const EnterpriseDataMappingApp = () => {
     });
   }, []);
 
-  // Cross-reference data merging
-  const createCrossReferencedData = useCallback((commissions, orders) => {
-    const crossReferencedData = new Map();
-    
-    // Helper function to extract customer identifier
-    const getCustomerKey = (record, isCommission = true) => {
-      let customer = '';
-      let account = '';
-      
-      if (isCommission) {
-        // Try common commission customer fields
-        customer = record['Customer'] || record['CUSTFNAME'] + ' ' + record['CUSTLNAME'] || 
-                  record['Customer Name'] || record['Provider Customer Name'] || '';
-        account = record['ACCOUNTNBR'] || record['Account Number'] || record['Account'] || 
-                 record['Provider Account #'] || '';
-      } else {
-        // Try common order customer fields
-        customer = record['Customer Name'] || record['Customer'] || record['Provider Customer Name'] || 
-                  record['Client Name'] || '';
-        account = record['Account Number'] || record['Number'] || record['Order ID'] || 
-                 record['RPM Order'] || record['Sandler Order #'] || '';
+  // System-specific field mappers
+  const getFieldMapper = useCallback((system) => {
+    const mappers = {
+      'WINDSTREAM': {
+        customer: (record) => `${record.CUSTFNAME || ''} ${record.CUSTLNAME || ''}`.trim() || record['Customer Name'],
+        rep: (record) => record.SALESID || record['Seller Name'],
+        commission: (record) => parseFloat(record.COMMISSION) || 0,
+        revenue: (record) => parseFloat(record.REVENUE) || 0
+      },
+      'APPDIRECT': {
+        customer: (record) => record.Customer || record['Provider Customer Name'] || '',
+        rep: (record) => record['Sales Rep'] || record.Advisor || '',
+        commission: (record) => parseFloat(record['Comp Paid']?.replace(/[$,()]/g, '')) || 0,
+        revenue: (record) => parseFloat(record.Revenue?.replace(/[$,()]/g, '')) || 0
+      },
+      'IBS': {
+        customer: (record) => record.Customer || record['Customer Name'],
+        rep: (record) => record.Rep || record['Rep Name'],
+        commission: (record) => parseFloat(record['Sales comm.']?.replace(/[$,()]/g, '')) || 0,
+        revenue: (record) => parseFloat(record['Net billed']?.replace(/[$,()]/g, '')) || parseFloat(record.MRC?.replace(/[$,()]/g, '')) || 0
+      },
+      'INTELISYS': {
+        customer: (record) => record.Customer,
+        rep: (record) => record.Rep,
+        commission: (record) => parseFloat(record['Sales Comm.']?.replace(/[$,()]/g, '')) || 0,
+        revenue: (record) => parseFloat(record['Net Billed']?.replace(/[$,()]/g, '')) || parseFloat(record['Total Estimated MRC']?.replace(/[$,()]/g, '')) || 0
+      },
+      'SANDLER': {
+        customer: (record) => record.Customer,
+        rep: (record) => record.Rep,
+        commission: (record) => parseFloat(record['Agent comm.']) || 0,
+        revenue: (record) => parseFloat(record['Net Billed']) || parseFloat(record['Contract MRC']) || 0
+      },
+      'AVANT': {
+        customer: (record) => record.Customer,
+        rep: (record) => record.Rep,
+        commission: (record) => parseFloat(record['Sales Commission']) || 0,
+        revenue: (record) => parseFloat(record['Net Billed']) || 0
       }
-      
-      return `${customer.trim()}|${account.trim() || 'default'}`;
     };
     
-    // Index commission data
+    return mappers[system] || mappers['AVANT'];
+  }, []);
+
+  // Cross-reference data merging
+  const createCrossReferencedData = useCallback((commissions, orders, fieldMapper) => {
+    const crossReferencedData = new Map();
+    
+    // Index commission data by customer and account
     commissions.forEach(commissionRow => {
-      const key = getCustomerKey(commissionRow, true);
+      const customer = fieldMapper.customer(commissionRow);
+      const account = commissionRow.Account || commissionRow['Account Number'] || 
+                     commissionRow.ACCOUNTNBR || commissionRow['Acct #'] || 
+                     commissionRow['Account #'] || commissionRow['Provider Account #'];
+      
+      const key = `${customer}|${account || 'default'}`;
       
       if (!crossReferencedData.has(key)) {
         crossReferencedData.set(key, {
+          customer,
+          account,
           commissionData: [],
           orderData: [],
           combinedData: {}
@@ -622,19 +455,25 @@ const EnterpriseDataMappingApp = () => {
       }
       
       crossReferencedData.get(key).commissionData.push(commissionRow);
-      // Store commission data with prefix
       Object.entries(commissionRow).forEach(([field, value]) => {
-        crossReferencedData.get(key).combinedData[field] = value;
         crossReferencedData.get(key).combinedData[`commission_${field}`] = value;
+        crossReferencedData.get(key).combinedData[field] = value;
       });
     });
     
     // Match and merge order data
     orders.forEach(orderRow => {
-      const key = getCustomerKey(orderRow, false);
+      const customer = fieldMapper.customer(orderRow);
+      const account = orderRow.Account || orderRow['Account Number'] || 
+                     orderRow.ACCOUNTNBR || orderRow.Number || 
+                     orderRow['Provider Account #'] || orderRow['Sandler Order #'];
+      
+      const key = `${customer}|${account || 'default'}`;
       
       if (!crossReferencedData.has(key)) {
         crossReferencedData.set(key, {
+          customer,
+          account,
           commissionData: [],
           orderData: [],
           combinedData: {}
@@ -642,44 +481,26 @@ const EnterpriseDataMappingApp = () => {
       }
       
       crossReferencedData.get(key).orderData.push(orderRow);
-      // Store order data with prefix, don't overwrite existing commission data
       Object.entries(orderRow).forEach(([field, value]) => {
+        crossReferencedData.get(key).combinedData[`order_${field}`] = value;
         if (!crossReferencedData.get(key).combinedData[field]) {
           crossReferencedData.get(key).combinedData[field] = value;
         }
-        crossReferencedData.get(key).combinedData[`order_${field}`] = value;
       });
     });
     
     return crossReferencedData;
   }, []);
 
-  // Generate template data based on mappings
-  const generateTemplateData = useCallback((crossReferencedData, templateType) => {
-    const mappings = templateMappings[templateType];
-    if (!mappings) return [];
+  // Field value extraction with template configuration
+  const getFieldValue = useCallback((combinedRecord, fieldName, templateConfig, templateType) => {
+    if (!templateConfig[templateType] || !templateConfig[templateType].fields[fieldName]) {
+      return combinedRecord[fieldName] || '';
+    }
     
-    return Array.from(crossReferencedData.values()).map((record, index) => {
-      const templateRecord = {};
-      
-      Object.entries(mappings).forEach(([templateField, mapping]) => {
-        if (mapping.enabled && mapping.sourceField) {
-          const sourceField = mapping.sourceFile === 'commissions' ? 
-            `commission_${mapping.sourceField}` : 
-            mapping.sourceFile === 'orders' ? 
-            `order_${mapping.sourceField}` : 
-            mapping.sourceField;
-          
-          templateRecord[templateField] = record.combinedData[sourceField] || 
-                                        record.combinedData[mapping.sourceField] || '';
-        } else {
-          templateRecord[templateField] = '';
-        }
-      });
-      
-      return templateRecord;
-    });
-  }, [templateMappings]);
+    const mappedField = templateConfig[templateType].fields[fieldName].mappedTo || fieldName;
+    return combinedRecord[mappedField] || combinedRecord[fieldName] || '';
+  }, []);
 
   // Main processing function
   const processFiles = useCallback(async () => {
@@ -695,6 +516,7 @@ const EnterpriseDataMappingApp = () => {
     try {
       addLog('Starting file processing...', 'info');
       
+      // Read and parse files
       const commissionText = await files.commissions.text();
       const orderText = await files.orders.text();
       
@@ -704,6 +526,7 @@ const EnterpriseDataMappingApp = () => {
       addLog(`Parsed ${commissionData.length} commission records`, 'success');
       addLog(`Parsed ${orderData.length} order records`, 'success');
 
+      // Detect system type
       const commissionHeaders = commissionData.length > 0 ? Object.keys(commissionData[0]) : [];
       const orderHeaders = orderData.length > 0 ? Object.keys(orderData[0]) : [];
       
@@ -713,41 +536,119 @@ const EnterpriseDataMappingApp = () => {
       const systemName = systemPatterns[systemType]?.name || 'Generic System';
       addLog(`Detected system: ${systemName}`, 'success');
 
-      setStep(3);
-      addLog('Starting cross-reference analysis...', 'info');
+      // Get system-specific field mapper
+      const fieldMapper = getFieldMapper(systemType);
 
-      const crossReferencedData = createCrossReferencedData(commissionData, orderData);
-      addLog(`Cross-referenced ${crossReferencedData.size} unique customer records`, 'success');
+      // Filter valid records
+      const validCommissions = commissionData.filter(row => {
+        const customer = fieldMapper.customer(row);
+        return customer && customer.trim() !== '' && customer !== '(adjustment)' && 
+               customer.toLowerCase() !== 'customer' && customer.toLowerCase() !== 'n/a';
+      });
+
+      const validOrders = orderData.filter(row => {
+        const customer = fieldMapper.customer(row);
+        return customer && customer.trim() !== '' && customer !== '(adjustment)' && 
+               customer.toLowerCase() !== 'customer' && customer.toLowerCase() !== 'n/a';
+      });
+
+      addLog(`Filtered to ${validCommissions.length} valid commission records`, 'info');
+      addLog(`Filtered to ${validOrders.length} valid order records`, 'info');
+
+      setStep(3);
+      addLog('Starting cross-reference analysis and data merging...', 'info');
+
+      // Create cross-referenced combined data
+      const crossReferencedData = createCrossReferencedData(validCommissions, validOrders, fieldMapper);
+      addLog(`Cross-referenced ${crossReferencedData.size} unique customer-account combinations`, 'success');
 
       setStep(4);
-      addLog('Generating templates based on field mappings...', 'info');
+      addLog('Generating templates with available fields...', 'info');
 
-      const templateResults = {};
-      let totalGenerated = 0;
-      
-      Object.keys(templateRequirements).forEach(templateType => {
-        if (enabledTemplates[templateType]) {
-          const templateData = generateTemplateData(crossReferencedData, templateType);
-          templateResults[templateType] = templateData;
-          totalGenerated += templateData.length;
-          addLog(`Generated ${templateData.length} ${templateType} records`, 'success');
-        }
-      });
+      // Convert cross-referenced data to arrays for template generation
+      const crossReferencedArray = Array.from(crossReferencedData.values());
+
+      // Generate dynamic templates using available fields
+      const generateTemplate = (templateType) => {
+        return crossReferencedArray.map((record, index) => {
+          const combined = record.combinedData;
+          const template = {};
+          
+          // Get enabled fields for this template type
+          const enabledFields = templateConfig[templateType] ? 
+            Object.entries(templateConfig[templateType].fields)
+              .filter(([field, config]) => config.selected)
+              .map(([field, config]) => ({
+                templateField: field,
+                sourceField: config.mappedTo || field
+              })) : [];
+          
+          // If no fields configured, use all available fields
+          if (enabledFields.length === 0) {
+            Object.keys(combined).forEach(field => {
+              template[field] = combined[field] || '';
+            });
+          } else {
+            enabledFields.forEach(({ templateField, sourceField }) => {
+              template[templateField] = combined[sourceField] || '';
+            });
+          }
+          
+          return template;
+        });
+      };
+
+      // Generate all templates
+      const customers = generateTemplate('customer');
+      const locations = generateTemplate('location');
+      const orders = generateTemplate('order');
+      const contracts = generateTemplate('contract');
+
+      addLog('Template generation completed', 'success');
 
       setStep(5);
       setResults({
-        templates: templateResults,
+        customers: customers.sort((a, b) => {
+          const nameA = Object.values(a)[0] || '';
+          const nameB = Object.values(b)[0] || '';
+          return nameA.toString().localeCompare(nameB.toString());
+        }),
+        locations: locations.sort((a, b) => {
+          const nameA = Object.values(a)[0] || '';
+          const nameB = Object.values(b)[0] || '';
+          return nameA.toString().localeCompare(nameB.toString());
+        }),
+        orders: orders.sort((a, b) => {
+          const nameA = Object.values(a)[0] || '';
+          const nameB = Object.values(b)[0] || '';
+          return nameA.toString().localeCompare(nameB.toString());
+        }),
+        contracts: contracts.sort((a, b) => {
+          const nameA = Object.values(a)[0] || '';
+          const nameB = Object.values(b)[0] || '';
+          return nameA.toString().localeCompare(nameB.toString());
+        }),
         systemType,
         crossReferencedData,
         stats: {
-          totalRecords: crossReferencedData.size,
-          totalGenerated,
+          totalCustomers: customers.length,
+          totalLocations: locations.length,
+          totalOrders: orders.length,
+          totalContracts: contracts.length,
           commissionFields: commissionHeaders.length,
-          orderFields: orderHeaders.length
+          orderFields: orderHeaders.length,
+          totalRevenue: crossReferencedArray.reduce((sum, record) => {
+            return sum + record.commissionData.reduce((commSum, comm) => 
+              commSum + (fieldMapper.revenue(comm) || 0), 0);
+          }, 0),
+          totalCommissions: crossReferencedArray.reduce((sum, record) => {
+            return sum + record.commissionData.reduce((commSum, comm) => 
+              commSum + (fieldMapper.commission(comm) || 0), 0);
+          }, 0)
         }
       });
 
-      addLog(`Processing complete! Generated ${totalGenerated} total template records`, 'success');
+      addLog(`Processing complete! Generated ${customers.length} customers, ${locations.length} locations, ${orders.length} orders, ${contracts.length} contracts`, 'success');
 
     } catch (error) {
       console.error('Processing error:', error);
@@ -756,18 +657,58 @@ const EnterpriseDataMappingApp = () => {
     } finally {
       setProcessing(false);
     }
-  }, [files, parseCSV, detectSystemType, createCrossReferencedData, generateTemplateData, templateMappings, enabledTemplates, addLog]);
+  }, [files, parseCSV, detectSystemType, getFieldMapper, createCrossReferencedData, templateConfig, addLog]);
 
   // CSV export functionality
-  const exportToCSV = useCallback((data, filename) => {
+  const exportToCSV = useCallback((data, filename, templateType) => {
     if (!data || data.length === 0) return;
     
-    const headers = Object.keys(data[0]);
-    let csvContent = headers.join(',') + '\n';
+    const selectedFields = templateConfig[templateType] ? 
+      Object.entries(templateConfig[templateType].fields)
+        .filter(([field, config]) => config.selected)
+        .map(([field, config]) => ({
+          templateField: field,
+          mappedField: config.mappedTo || field
+        })) :
+      Object.keys(data[0]).map(field => ({
+        templateField: field,
+        mappedField: field
+      }));
+    
+    if (selectedFields.length === 0) {
+      // If no fields configured, export all available fields
+      const allFields = Object.keys(data[0]);
+      const headerRow = allFields;
+      let csvContent = headerRow.join(',') + '\n';
+      
+      data.forEach(row => {
+        const values = allFields.map(field => {
+          const value = row[field] || '';
+          return `"${value.toString().replace(/"/g, '""')}"`;
+        });
+        csvContent += values.join(',') + '\n';
+      });
+      
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      addLog(`Exported ${data.length} ${templateType} records with all available fields`, 'success');
+      return;
+    }
+    
+    const headerRow = selectedFields.map(field => field.templateField);
+    let csvContent = headerRow.join(',') + '\n';
     
     data.forEach(row => {
-      const values = headers.map(header => {
-        const value = row[header] || '';
+      const values = selectedFields.map(field => {
+        const value = row[field.templateField] || '';
         return `"${value.toString().replace(/"/g, '""')}"`;
       });
       csvContent += values.join(',') + '\n';
@@ -783,8 +724,8 @@ const EnterpriseDataMappingApp = () => {
     link.click();
     document.body.removeChild(link);
     
-    addLog(`Exported ${data.length} records to ${filename}`, 'success');
-  }, [addLog]);
+    addLog(`Exported ${data.length} ${templateType} records with ${selectedFields.length} fields`, 'success');
+  }, [templateConfig, addLog]);
 
   // Reset functionality
   const resetApplication = () => {
@@ -793,101 +734,25 @@ const EnterpriseDataMappingApp = () => {
     setDetectedSystem(null);
     setProcessingLog([]);
     setShowTemplateConfig(false);
-    setShowTemplateEditor(false);
-    setEditingTemplate(null);
-    setNewFieldName('');
-    setNewFieldDescription('');
-    setNewFieldType('optional');
-    setEditingField(null);
-    setEditFieldName('');
-    setEditFieldDescription('');
-    setTemplateName('');
-    setTemplateDescription('');
     setStep(1);
     setFileFields({ commissions: [], orders: [] });
-    setTemplateMappings({});
-    setCustomTemplateRequirements(null);
-    setEnabledTemplates({
-      customer: true,
-      location: true,
-      order: true,
-      contract: true
+    setAvailableFields([]);
+    setTemplateConfig({
+      customer: { enabled: true, fields: {} },
+      location: { enabled: true, fields: {} },
+      order: { enabled: true, fields: {} },
+      contract: { enabled: true, fields: {} }
     });
-    clearSavedMappings();
+    setExpandedTemplates({
+      customer: false,
+      location: false,
+      order: false,
+      contract: false
+    });
   };
 
-  // Update template mapping
-  const updateTemplateMapping = useCallback((templateType, fieldName, sourceField, sourceFile) => {
-    setTemplateMappings(prev => {
-      const newMappings = {
-        ...prev,
-        [templateType]: {
-          ...prev[templateType],
-          [fieldName]: {
-            ...prev[templateType]?.[fieldName],
-            sourceField,
-            sourceFile
-          }
-        }
-      };
-      
-      // Save to localStorage after updating
-      saveToLocalStorage(STORAGE_KEY, newMappings);
-      return newMappings;
-    });
-  }, []);
-
-  // Toggle field enabled state
-  const toggleFieldEnabled = useCallback((templateType, fieldName) => {
-    setTemplateMappings(prev => ({
-      ...prev,
-      [templateType]: {
-        ...prev[templateType],
-        [fieldName]: {
-          ...prev[templateType][fieldName],
-          enabled: !prev[templateType][fieldName].enabled
-        }
-      }
-    }));
-  }, []);
-
-  const clearSavedMappings = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(TEMPLATE_CONFIG_KEY);
-    setTemplateMappings({});
-    setEnabledTemplates({
-      customer: true,
-      location: true,
-      order: true,
-      contract: true
-    });
-    addLog('Cleared saved template mappings', 'info');
-  }, [addLog]);
-
-  // Add this before the existing useEffect
-  const saveTemplateConfig = useCallback(() => {
-    const configToSave = {
-      mappings: templateMappings,
-      enabled: enabledTemplates
-    };
-    saveToLocalStorage(TEMPLATE_CONFIG_KEY, configToSave);
-    addLog('Template configuration saved', 'success');
-  }, [templateMappings, enabledTemplates, addLog]);
-
-  // Modify the existing useEffect to load both mappings and configuration
-  useEffect(() => {
-    const savedConfig = loadFromLocalStorage(TEMPLATE_CONFIG_KEY);
-    
-    if (savedConfig) {
-      if (savedConfig.mappings) {
-        setTemplateMappings(savedConfig.mappings);
-      }
-      if (savedConfig.enabled) {
-        setEnabledTemplates(savedConfig.enabled);
-      }
-      addLog('Loaded saved template configuration', 'info');
-    }
-  }, [addLog]);
+  // Get current template definitions
+  const templateDefinitions = getTemplateDefinitions();
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -898,10 +763,10 @@ const EnterpriseDataMappingApp = () => {
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center">
                 <Database className="mr-3" size={32} />
-                Enterprise Data Mapping Platform
+                Dynamic Enterprise Data Mapping Platform
               </h1>
               <p className="text-gray-600">
-                Map commission & order data to standardized template formats with intelligent field matching
+                Universal commission & order data processing with dynamic field mapping based on your uploaded files
               </p>
             </div>
             {detectedSystem && (
@@ -920,45 +785,20 @@ const EnterpriseDataMappingApp = () => {
           </div>
         </div>
 
-        {/* Template Requirements Overview */}
+        {/* Supported Systems */}
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <h3 className="text-lg font-semibold mb-4 flex items-center">
             <Settings className="mr-2" size={20} />
-            Template Requirements
-            <span className="ml-2 text-sm font-normal text-gray-500">
-              (Click templates to customize requirements)
-            </span>
+            Supported Systems
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {Object.entries(templateRequirements).map(([templateType, template]) => {
-              const Icon = template.icon;
-              const colorClasses = getTemplateColorClasses(template.color);
-              
-              return (
-                <div 
-                  key={templateType} 
-                  className={`${colorClasses.bg} ${colorClasses.border} rounded-lg p-4 cursor-pointer hover:shadow-md transition-shadow`}
-                  onClick={() => openTemplateEditor(templateType)}
-                >
-                  <div className="flex items-center mb-2">
-                    <Icon className={`${colorClasses.text} mr-2`} size={20} />
-                    <h4 className="font-semibold">{template.name}</h4>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-3">{template.description}</p>
-                  <div className="text-xs space-y-1">
-                    <div className="text-red-600 font-medium">
-                      {template.required.length} Required Fields
-                    </div>
-                    <div className="text-gray-500">
-                      {template.optional.length} Optional Fields
-                    </div>
-                  </div>
-                  <div className="mt-2 text-xs text-blue-600 font-medium">
-                    Click to customize →
-                  </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {Object.entries(systemPatterns).map(([key, config]) => (
+              <div key={key} className={`${config.colorClasses.bg} ${config.colorClasses.border} rounded-lg p-3 text-center`}>
+                <div className={`${config.colorClasses.text} font-medium text-sm`}>
+                  {config.name}
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         </div>
 
@@ -969,8 +809,8 @@ const EnterpriseDataMappingApp = () => {
               { step: 1, title: 'Upload Files', icon: Upload },
               { step: 2, title: 'Detect System', icon: Zap },
               { step: 3, title: 'Cross-Reference', icon: Database },
-              { step: 4, title: 'Map Templates', icon: FileText },
-              { step: 5, title: 'Export Templates', icon: Download }
+              { step: 4, title: 'Generate Templates', icon: FileText },
+              { step: 5, title: 'Download Results', icon: Download }
             ].map(({ step: stepNum, title, icon: Icon }) => (
               <div key={stepNum} className="flex items-center">
                 <div className={`rounded-full p-3 ${
@@ -993,370 +833,74 @@ const EnterpriseDataMappingApp = () => {
           </div>
         </div>
 
-        {/* Template Editor Modal */}
-        {showTemplateEditor && editingTemplate && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl min-h-[90vh] max-h-[95vh] flex flex-col my-8">
-              <div className="p-6 border-b border-gray-200 flex-shrink-0">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold">Edit Template Requirements</h2>
-                  <button
-                    onClick={() => setShowTemplateEditor(false)}
-                    className="text-gray-400 hover:text-gray-600 text-2xl leading-none p-1"
-                  >
-                    <X size={24} />
-                  </button>
-                </div>
-                <p className="text-gray-600 mt-2">
-                  Customize the field requirements for the {templateRequirements[editingTemplate]?.name} template.
-                </p>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-6">
-                <div className="space-y-6">
-                  {/* Template Info Editor */}
-                  <div className="border border-gray-200 rounded-lg p-4">
-                    <h3 className="font-semibold mb-4 flex items-center">
-                      {(() => {
-                        const template = templateRequirements[editingTemplate];
-                        const Icon = template?.icon;
-                        const colorClasses = getTemplateColorClasses(template?.color);
-                        return Icon ? <Icon className={`${colorClasses.text} mr-2`} size={20} /> : null;
-                      })()}
-                      Template Information
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Template Name
-                        </label>
-                        <input
-                          type="text"
-                          value={templateName}
-                          onChange={(e) => setTemplateName(e.target.value)}
-                          onBlur={() => updateTemplateInfo(editingTemplate, templateName, templateDescription)}
-                          className="w-full p-2 border border-gray-300 rounded-lg"
-                          placeholder="Enter template name"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Template Description
-                        </label>
-                        <input
-                          type="text"
-                          value={templateDescription}
-                          onChange={(e) => setTemplateDescription(e.target.value)}
-                          onBlur={() => updateTemplateInfo(editingTemplate, templateName, templateDescription)}
-                          className="w-full p-2 border border-gray-300 rounded-lg"
-                          placeholder="Enter template description"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Add New Field */}
-                  <div className="border border-gray-200 rounded-lg p-4">
-                    <h3 className="font-semibold mb-4">Add New Field</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Field Name
-                        </label>
-                        <input
-                          type="text"
-                          value={newFieldName}
-                          onChange={(e) => setNewFieldName(e.target.value)}
-                          className="w-full p-2 border border-gray-300 rounded-lg"
-                          placeholder="e.g., CustomerID"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Description
-                        </label>
-                        <input
-                          type="text"
-                          value={newFieldDescription}
-                          onChange={(e) => setNewFieldDescription(e.target.value)}
-                          className="w-full p-2 border border-gray-300 rounded-lg"
-                          placeholder="Field description"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Field Type
-                        </label>
-                        <select
-                          value={newFieldType}
-                          onChange={(e) => setNewFieldType(e.target.value)}
-                          className="w-full p-2 border border-gray-300 rounded-lg"
-                        >
-                          <option value="required">Required</option>
-                          <option value="optional">Optional</option>
-                        </select>
-                      </div>
-                      <div className="flex items-end">
-                        <button
-                          onClick={() => {
-                            addTemplateField(editingTemplate, newFieldType, newFieldName, newFieldDescription);
-                            setNewFieldName('');
-                            setNewFieldDescription('');
-                          }}
-                          disabled={!newFieldName.trim()}
-                          className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg"
-                        >
-                          Add Field
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Required Fields */}
-                  <div className="border border-red-200 rounded-lg p-4 bg-red-50">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-semibold text-red-800">
-                        Required Fields ({templateRequirements[editingTemplate]?.required?.length || 0})
-                      </h3>
-                    </div>
-                    <div className="space-y-2">
-                      {templateRequirements[editingTemplate]?.required?.map((field) => (
-                        <div key={field.field} className="bg-white border border-red-300 rounded-lg p-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              {editingField === `required-${field.field}` ? (
-                                <div className="grid grid-cols-2 gap-2">
-                                  <input
-                                    type="text"
-                                    value={editFieldName}
-                                    onChange={(e) => setEditFieldName(e.target.value)}
-                                    className="p-1 border border-gray-300 rounded text-sm"
-                                    placeholder="Field name"
-                                  />
-                                  <input
-                                    type="text"
-                                    value={editFieldDescription}
-                                    onChange={(e) => setEditFieldDescription(e.target.value)}
-                                    className="p-1 border border-gray-300 rounded text-sm"
-                                    placeholder="Description"
-                                  />
-                                </div>
-                              ) : (
-                                <div>
-                                  <div className="font-medium text-gray-900">{field.field}</div>
-                                  <div className="text-sm text-gray-600">{field.description}</div>
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex items-center space-x-2 ml-4">
-                              {editingField === `required-${field.field}` ? (
-                                <>
-                                  <button
-                                    onClick={() => {
-                                      updateTemplateField(editingTemplate, 'required', field.field, editFieldName, editFieldDescription);
-                                      setEditingField(null);
-                                    }}
-                                    className="text-green-600 hover:text-green-800 text-sm"
-                                  >
-                                    Save
-                                  </button>
-                                  <button
-                                    onClick={() => setEditingField(null)}
-                                    className="text-gray-600 hover:text-gray-800 text-sm"
-                                  >
-                                    Cancel
-                                  </button>
-                                </>
-                              ) : (
-                                <>
-                                  <button
-                                    onClick={() => {
-                                      setEditingField(`required-${field.field}`);
-                                      setEditFieldName(field.field);
-                                      setEditFieldDescription(field.description);
-                                    }}
-                                    className="text-blue-600 hover:text-blue-800 text-sm"
-                                  >
-                                    Edit
-                                  </button>
-                                  <button
-                                    onClick={() => moveFieldBetweenTypes(editingTemplate, field.field, 'required', 'optional')}
-                                    className="text-orange-600 hover:text-orange-800 text-sm"
-                                  >
-                                    → Optional
-                                  </button>
-                                  <button
-                                    onClick={() => removeTemplateField(editingTemplate, 'required', field.field)}
-                                    className="text-red-600 hover:text-red-800 text-sm"
-                                  >
-                                    Remove
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      {(!templateRequirements[editingTemplate]?.required || templateRequirements[editingTemplate].required.length === 0) && (
-                        <div className="text-gray-500 text-sm italic">No required fields defined</div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Optional Fields */}
-                  <div className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-semibold text-gray-800">
-                        Optional Fields ({templateRequirements[editingTemplate]?.optional?.length || 0})
-                      </h3>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {templateRequirements[editingTemplate]?.optional?.map((field) => (
-                        <div key={field.field} className="border border-gray-300 rounded-lg p-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              {editingField === `optional-${field.field}` ? (
-                                <div className="space-y-1">
-                                  <input
-                                    type="text"
-                                    value={editFieldName}
-                                    onChange={(e) => setEditFieldName(e.target.value)}
-                                    className="w-full p-1 border border-gray-300 rounded text-sm"
-                                    placeholder="Field name"
-                                  />
-                                  <input
-                                    type="text"
-                                    value={editFieldDescription}
-                                    onChange={(e) => setEditFieldDescription(e.target.value)}
-                                    className="w-full p-1 border border-gray-300 rounded text-sm"
-                                    placeholder="Description"
-                                  />
-                                </div>
-                              ) : (
-                                <div>
-                                  <div className="font-medium text-gray-900 text-sm">{field.field}</div>
-                                  <div className="text-xs text-gray-600">{field.description}</div>
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex flex-col space-y-1 ml-2">
-                              {editingField === `optional-${field.field}` ? (
-                                <>
-                                  <button
-                                    onClick={() => {
-                                      updateTemplateField(editingTemplate, 'optional', field.field, editFieldName, editFieldDescription);
-                                      setEditingField(null);
-                                    }}
-                                    className="text-green-600 hover:text-green-800 text-xs"
-                                  >
-                                    Save
-                                  </button>
-                                  <button
-                                    onClick={() => setEditingField(null)}
-                                    className="text-gray-600 hover:text-gray-800 text-xs"
-                                  >
-                                    Cancel
-                                  </button>
-                                </>
-                              ) : (
-                                <>
-                                  <button
-                                    onClick={() => {
-                                      setEditingField(`optional-${field.field}`);
-                                      setEditFieldName(field.field);
-                                      setEditFieldDescription(field.description);
-                                    }}
-                                    className="text-blue-600 hover:text-blue-800 text-xs"
-                                  >
-                                    Edit
-                                  </button>
-                                  <button
-                                    onClick={() => moveFieldBetweenTypes(editingTemplate, field.field, 'optional', 'required')}
-                                    className="text-orange-600 hover:text-orange-800 text-xs"
-                                  >
-                                    Make Required
-                                  </button>
-                                  <button
-                                    onClick={() => removeTemplateField(editingTemplate, 'optional', field.field)}
-                                    className="text-red-600 hover:text-red-800 text-xs"
-                                  >
-                                    Remove
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      {(!templateRequirements[editingTemplate]?.optional || templateRequirements[editingTemplate].optional.length === 0) && (
-                        <div className="text-gray-500 text-sm italic col-span-2">No optional fields defined</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 border-t border-gray-200 bg-gray-50 flex-shrink-0">
-                <div className="flex justify-between items-center">
-                  <button
-                    onClick={() => {
-                      if (window.confirm('Are you sure you want to reset this template to default requirements? This will remove all customizations.')) {
-                        resetTemplateToDefault(editingTemplate);
-                      }
-                    }}
-                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                  >
-                    Reset to Default
-                  </button>
-                  <div className="space-x-3">
-                    <button
-                      onClick={() => setShowTemplateEditor(false)}
-                      className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowTemplateEditor(false);
-                        addLog(`Template requirements updated for ${templateRequirements[editingTemplate]?.name}`, 'success');
-                      }}
-                      className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-                    >
-                      Save Changes
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Template Configuration Modal */}
         {showTemplateConfig && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-7xl min-h-[90vh] max-h-[95vh] flex flex-col my-8">
               <div className="p-6 border-b border-gray-200 flex-shrink-0">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold">Configure Template Field Mappings</h2>
+                  <h2 className="text-xl font-semibold">Configure Export Templates</h2>
                   <button
                     onClick={() => setShowTemplateConfig(false)}
                     className="text-gray-400 hover:text-gray-600 text-2xl leading-none p-1"
                   >
-                    <X size={24} />
+                    ✕
                   </button>
                 </div>
                 <p className="text-gray-600 mt-2">
-                  Map fields from your uploaded files to the required template fields. Required fields are marked in red.
+                  Select which templates to export and customize the fields for each template. All fields from your uploaded files are available for mapping.
                 </p>
+                
+                {/* File Fields Display */}
+                {(fileFields.commissions.length > 0 || fileFields.orders.length > 0) && (
+                  <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {fileFields.commissions.length > 0 && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <h4 className="font-semibold text-blue-800 mb-2 flex items-center">
+                          <FileText className="mr-2" size={16} />
+                          Commission File Fields ({fileFields.commissions.length})
+                        </h4>
+                        <div className="max-h-32 overflow-y-auto">
+                          <div className="grid grid-cols-2 gap-1 text-xs">
+                            {fileFields.commissions.map((field, idx) => (
+                              <div key={idx} className="text-blue-700 bg-white px-2 py-1 rounded border border-blue-200">
+                                {field}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {fileFields.orders.length > 0 && (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <h4 className="font-semibold text-green-800 mb-2 flex items-center">
+                          <ShoppingCart className="mr-2" size={16} />
+                          Orders File Fields ({fileFields.orders.length})
+                        </h4>
+                        <div className="max-h-32 overflow-y-auto">
+                          <div className="grid grid-cols-2 gap-1 text-xs">
+                            {fileFields.orders.map((field, idx) => (
+                              <div key={idx} className="text-green-700 bg-white px-2 py-1 rounded border border-green-200">
+                                {field}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex-1 overflow-y-auto p-6">
-                <div className="space-y-6">
-                  {Object.entries(templateRequirements).map(([templateType, template]) => {
-                    const Icon = template.icon;
-                    const colorClasses = getTemplateColorClasses(template.color);
-                    const mappings = templateMappings[templateType] || {};
-                    const mappedCount = Object.values(mappings).filter(m => m.enabled && m.sourceField).length;
+                <div className="space-y-4">
+                  {Object.entries(templateDefinitions).map(([templateType, definition]) => {
+                    const Icon = definition.icon;
+                    const config = templateConfig[templateType];
+                    const selectedCount = config ? Object.values(config.fields).filter(f => f.selected).length : 0;
+                    const isExpanded = expandedTemplates[templateType];
+                    const colorClasses = getTemplateColorClasses(definition.color);
                     
                     return (
                       <div key={templateType} className="border border-gray-200 rounded-lg">
@@ -1365,197 +909,130 @@ const EnterpriseDataMappingApp = () => {
                             <div className="flex items-center">
                               <input
                                 type="checkbox"
-                                checked={enabledTemplates[templateType]}
-                                onChange={() => setEnabledTemplates(prev => ({
-                                  ...prev,
-                                  [templateType]: !prev[templateType]
-                                }))}
+                                checked={config?.enabled || false}
+                                onChange={() => toggleTemplateEnabled(templateType)}
                                 className="mr-3"
                               />
                               <Icon className={`${colorClasses.text} mr-2`} size={20} />
-                              <h3 className="font-semibold text-lg">{template.name}</h3>
+                              <h3 className="font-semibold text-lg">{definition.name}</h3>
                               <span className={`ml-3 px-2 py-1 text-xs rounded-full ${colorClasses.bg} ${colorClasses.text}`}>
-                                {mappedCount} of {template.required.length + template.optional.length} fields mapped
+                                {selectedCount} of {definition.fields.length} fields selected
                               </span>
                             </div>
+                            <div className="flex items-center space-x-2">
+                              {config?.enabled && (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setTemplateConfig(prev => {
+                                        const cfg = { ...prev };
+                                        const tpl = { ...cfg[templateType] };
+                                        const fields = { ...tpl.fields };
+
+                                        definition.fields.forEach(name => {
+                                          fields[name] = {
+                                            ...fields[name],
+                                            selected: true,
+                                            required: false,
+                                            mappedTo: name
+                                          };
+                                        });
+
+                                        tpl.fields = fields;
+                                        cfg[templateType] = tpl;
+                                        return cfg;
+                                      });
+                                    }}
+                                    className="text-sm text-blue-600 hover:text-blue-800"
+                                  >
+                                    Select All
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setTemplateConfig(prev => {
+                                        const cfg = { ...prev };
+                                        const tpl = { ...cfg[templateType] };
+                                        const fields = { ...tpl.fields };
+
+                                        definition.fields.forEach(name => {
+                                          fields[name] = {
+                                            ...fields[name],
+                                            selected: definition.defaultSelected.includes(name),
+                                            required: false,
+                                            mappedTo: name
+                                          };
+                                        });
+
+                                        tpl.fields = fields;
+                                        cfg[templateType] = tpl;
+                                        return cfg;
+                                      });
+                                    }}
+                                    className="text-sm text-green-600 hover:text-green-800"
+                                  >
+                                    Reset to Default
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                onClick={() => toggleTemplateExpanded(templateType)}
+                                className="text-gray-500 hover:text-gray-700 p-1"
+                              >
+                                {isExpanded ? '▼' : '▶'}
+                              </button>
+                            </div>
                           </div>
-                          <p className="text-sm text-gray-600 mt-2">{template.description}</p>
                         </div>
 
-                        {enabledTemplates[templateType] && (
+                        {config?.enabled && isExpanded && (
                           <div className="p-4">
-                            {/* Required Fields */}
-                            <div className="mb-6">
-                              <h4 className="font-semibold text-red-600 mb-3">Required Fields</h4>
-                              <div className="space-y-3">
-                                {template.required.map(fieldDef => {
-                                  const mapping = mappings[fieldDef.field] || {};
-                                  
-                                  return (
-                                    <div key={fieldDef.field} className="border border-red-200 rounded-lg p-3 bg-red-50">
-                                      <div className="flex items-center justify-between mb-2">
-                                        <div className="flex items-center">
-                                          <input
-                                            type="checkbox"
-                                            checked={mapping.enabled || false}
-                                            onChange={() => toggleFieldEnabled(templateType, fieldDef.field)}
-                                            className="mr-2"
-                                          />
-                                          <label className="font-medium text-gray-900">
-                                            {fieldDef.field}
-                                          </label>
-                                          <span className="ml-2 text-xs text-red-600 bg-red-100 px-2 py-1 rounded">
-                                            Required
-                                          </span>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {definition.fields.map(field => {
+                                const fieldConfig = config.fields[field];
+                                
+                                return (
+                                  <div key={field} className={`border rounded-lg p-3 ${
+                                    fieldConfig?.selected ? 'border-blue-300 bg-blue-50' : 'border-gray-200'
+                                  }`}>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <label className="flex items-center cursor-pointer">
+                                        <input
+                                          type="checkbox"
+                                          checked={fieldConfig?.selected || false}
+                                          onChange={() => toggleFieldSelected(templateType, field)}
+                                          className="mr-2"
+                                        />
+                                        <span className="text-sm font-medium text-gray-900">
+                                          {field}
+                                        </span>
+                                      </label>
+                                    </div>
+                                    
+                                    {fieldConfig?.selected && (
+                                      <div className="mt-2 text-xs text-gray-600">
+                                        <div className="mb-1">
+                                          {field.startsWith('commission_') && (
+                                            <span className="text-blue-600">● Commission Field (Prefixed)</span>
+                                          )}
+                                          {field.startsWith('order_') && (
+                                            <span className="text-green-600">● Order Field (Prefixed)</span>
+                                          )}
+                                          {!field.startsWith('commission_') && !field.startsWith('order_') && fileFields.commissions.includes(field) && (
+                                            <span className="text-blue-600">● Commission Field</span>
+                                          )}
+                                          {!field.startsWith('commission_') && !field.startsWith('order_') && fileFields.orders.includes(field) && (
+                                            <span className="text-green-600">● Order Field</span>
+                                          )}
+                                          {!field.startsWith('commission_') && !field.startsWith('order_') && 
+                                           !fileFields.commissions.includes(field) && !fileFields.orders.includes(field) && (
+                                            <span className="text-purple-600">● Cross-Reference Field</span>
+                                          )}
                                         </div>
                                       </div>
-                                      <p className="text-sm text-gray-600 mb-3">{fieldDef.description}</p>
-                                      
-                                      {mapping.enabled && (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                          <div>
-                                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                                              Source File
-                                            </label>
-                                            <select
-                                              value={mapping.sourceFile || ''}
-                                              onChange={(e) => {
-                                                const file = e.target.value;
-                                                setTemplateMappings(prev => ({
-                                                  ...prev,
-                                                  [templateType]: {
-                                                    ...prev[templateType],
-                                                    [fieldDef.field]: {
-                                                      ...prev[templateType][fieldDef.field],
-                                                      sourceFile: file,
-                                                      sourceField: ''
-                                                    }
-                                                  }
-                                                }));
-                                              }}
-                                              className="w-full p-2 border border-gray-300 rounded text-sm"
-                                            >
-                                              <option value="">Select File</option>
-                                              <option value="commissions">Commission File</option>
-                                              <option value="orders">Orders File</option>
-                                            </select>
-                                          </div>
-                                          <div>
-                                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                                              Source Field
-                                            </label>
-                                            <select
-                                              value={mapping.sourceField || ''}
-                                              onChange={(e) => updateTemplateMapping(templateType, fieldDef.field, e.target.value, mapping.sourceFile)}
-                                              className="w-full p-2 border border-gray-300 rounded text-sm"
-                                              disabled={!mapping.sourceFile}
-                                            >
-                                              <option value="">Select Field</option>
-                                              {mapping.sourceFile === 'commissions' && fileFields.commissions.map(field => (
-                                                <option key={field} value={field}>{field}</option>
-                                              ))}
-                                              {mapping.sourceFile === 'orders' && fileFields.orders.map(field => (
-                                                <option key={field} value={field}>{field}</option>
-                                              ))}
-                                            </select>
-                                          </div>
-                                        </div>
-                                      )}
-                                      
-                                      {mapping.suggestions && mapping.suggestions.length > 0 && (
-                                        <div className="mt-3">
-                                          <p className="text-xs font-medium text-gray-700 mb-2">Suggestions:</p>
-                                          <div className="flex flex-wrap gap-2">
-                                            {mapping.suggestions.map((suggestion, idx) => (
-                                              <button
-                                                key={idx}
-                                                onClick={() => {
-                                                  const sourceFile = fileFields.commissions.includes(suggestion.field) ? 'commissions' : 'orders';
-                                                  updateTemplateMapping(templateType, fieldDef.field, suggestion.field, sourceFile);
-                                                }}
-                                                className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
-                                              >
-                                                {suggestion.field} ({suggestion.confidence}%)
-                                              </button>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            {/* Optional Fields */}
-                            <div>
-                              <h4 className="font-semibold text-gray-600 mb-3">Optional Fields</h4>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {template.optional.map(fieldDef => {
-                                  const mapping = mappings[fieldDef.field] || {};
-                                  
-                                  return (
-                                    <div key={fieldDef.field} className="border border-gray-200 rounded-lg p-3">
-                                      <div className="flex items-center justify-between mb-2">
-                                        <div className="flex items-center">
-                                          <input
-                                            type="checkbox"
-                                            checked={mapping.enabled || false}
-                                            onChange={() => toggleFieldEnabled(templateType, fieldDef.field)}
-                                            className="mr-2"
-                                          />
-                                          <label className="font-medium text-gray-900 text-sm">
-                                            {fieldDef.field}
-                                          </label>
-                                        </div>
-                                      </div>
-                                      
-                                      {mapping.enabled && (
-                                        <div className="space-y-2">
-                                          <div className="grid grid-cols-2 gap-2">
-                                            <select
-                                              value={mapping.sourceFile || ''}
-                                              onChange={(e) => {
-                                                const file = e.target.value;
-                                                setTemplateMappings(prev => ({
-                                                  ...prev,
-                                                  [templateType]: {
-                                                    ...prev[templateType],
-                                                    [fieldDef.field]: {
-                                                      ...prev[templateType][fieldDef.field],
-                                                      sourceFile: file,
-                                                      sourceField: ''
-                                                    }
-                                                  }
-                                                }));
-                                              }}
-                                              className="w-full p-1 border border-gray-300 rounded text-xs"
-                                            >
-                                              <option value="">File</option>
-                                              <option value="commissions">Commission</option>
-                                              <option value="orders">Orders</option>
-                                            </select>
-                                            <select
-                                              value={mapping.sourceField || ''}
-                                              onChange={(e) => updateTemplateMapping(templateType, fieldDef.field, e.target.value, mapping.sourceFile)}
-                                              className="w-full p-1 border border-gray-300 rounded text-xs"
-                                              disabled={!mapping.sourceFile}
-                                            >
-                                              <option value="">Field</option>
-                                              {mapping.sourceFile === 'commissions' && fileFields.commissions.map(field => (
-                                                <option key={field} value={field}>{field}</option>
-                                              ))}
-                                              {mapping.sourceFile === 'orders' && fileFields.orders.map(field => (
-                                                <option key={field} value={field}>{field}</option>
-                                              ))}
-                                            </select>
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         )}
@@ -1567,18 +1044,10 @@ const EnterpriseDataMappingApp = () => {
 
               <div className="p-6 border-t border-gray-200 bg-gray-50 flex-shrink-0">
                 <div className="flex justify-between items-center">
-                  <div className="flex items-center space-x-4">
-                    <div className="text-sm text-gray-600">
-                      {loadFromLocalStorage(TEMPLATE_CONFIG_KEY) 
-                        ? 'Configuration loaded from saved settings'
-                        : 'No saved configuration'}
-                    </div>
-                    <button
-                      onClick={clearSavedMappings}
-                      className="px-3 py-1 text-sm text-red-600 hover:text-red-800 border border-red-600 rounded"
-                    >
-                      Clear Saved
-                    </button>
+                  <div className="text-sm text-gray-600">
+                    <span className="text-blue-600">● Commission fields</span> | <span className="text-green-600">● Order fields</span> | <span className="text-purple-600">● Cross-reference fields</span>
+                    <br />
+                    All fields from your uploaded files are available for template mapping. Prefixed fields enable cross-file data combination.
                   </div>
                   <div className="space-x-3">
                     <button
@@ -1589,13 +1058,12 @@ const EnterpriseDataMappingApp = () => {
                     </button>
                     <button
                       onClick={() => {
-                        saveTemplateConfig();
                         setShowTemplateConfig(false);
-                        addLog('Template field mappings configured and saved', 'success');
+                        addLog('Template configuration updated with dynamic field mapping', 'success');
                       }}
                       className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
                     >
-                      Save & Apply
+                      Apply Configuration
                     </button>
                   </div>
                 </div>
@@ -1626,12 +1094,15 @@ const EnterpriseDataMappingApp = () => {
                     <p className="text-gray-600">
                       {files.commissions ? files.commissions.name : 'Upload Commission CSV'}
                     </p>
+                    <p className="text-sm text-gray-500 mt-2">
+                      Supports: Windstream, AppDirect, IBS, Intelisys, Sandler, Avant
+                    </p>
                   </label>
                 </div>
                 {files.commissions && (
                   <div className="mt-2 text-sm text-green-600 flex items-center">
                     <CheckCircle size={16} className="mr-1" />
-                    File uploaded ({fileFields.commissions.length} fields detected)
+                    File uploaded successfully ({fileFields.commissions.length} fields detected)
                   </div>
                 )}
               </div>
@@ -1654,16 +1125,81 @@ const EnterpriseDataMappingApp = () => {
                     <p className="text-gray-600">
                       {files.orders ? files.orders.name : 'Upload Orders CSV'}
                     </p>
+                    <p className="text-sm text-gray-500 mt-2">
+                      Auto-detects system format and applies cross-file mapping
+                    </p>
                   </label>
                 </div>
                 {files.orders && (
                   <div className="mt-2 text-sm text-green-600 flex items-center">
                     <CheckCircle size={16} className="mr-1" />
-                    File uploaded ({fileFields.orders.length} fields detected)
+                    File uploaded successfully ({fileFields.orders.length} fields detected)
                   </div>
                 )}
               </div>
             </div>
+            
+            {/* System Detection Display */}
+            {detectedSystem && files.commissions && files.orders && (
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2 flex items-center">
+                      <Zap className="mr-2 text-yellow-500" size={20} />
+                      System Detected & Dynamic Field Mapping Active
+                    </h3>
+                    <p className="text-gray-600">
+                      The system has automatically detected your data format and is ready to apply dynamic field mapping using all available fields from your files.
+                    </p>
+                  </div>
+                  <div className={`${getSystemColorClasses(detectedSystem).bg} ${getSystemColorClasses(detectedSystem).border} rounded-lg p-4`}>
+                    <div className="flex items-center">
+                      <Globe className={`${getSystemColorClasses(detectedSystem).text} mr-2`} size={20} />
+                      <div>
+                        <div className="font-semibold text-gray-900">Detected System</div>
+                        <div className={`${getSystemColorClasses(detectedSystem).text} font-medium`}>
+                          {systemPatterns[detectedSystem]?.name || 'Generic System'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Dynamic Field Information */}
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                  <h4 className="font-medium text-gray-900 mb-2">Available Fields for Template Mapping:</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <div className="font-medium text-blue-600 mb-1">Commission File Fields ({fileFields.commissions.length}):</div>
+                      <div className="max-h-24 overflow-y-auto text-xs space-y-1">
+                        {fileFields.commissions.slice(0, 10).map((field, idx) => (
+                          <div key={idx} className="text-gray-700">• {field}</div>
+                        ))}
+                        {fileFields.commissions.length > 10 && (
+                          <div className="text-gray-500">... and {fileFields.commissions.length - 10} more</div>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="font-medium text-green-600 mb-1">Orders File Fields ({fileFields.orders.length}):</div>
+                      <div className="max-h-24 overflow-y-auto text-xs space-y-1">
+                        {fileFields.orders.slice(0, 10).map((field, idx) => (
+                          <div key={idx} className="text-gray-700">• {field}</div>
+                        ))}
+                        {fileFields.orders.length > 10 && (
+                          <div className="text-gray-500">... and {fileFields.orders.length - 10} more</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                    <div className="text-sm text-blue-800">
+                      <strong>Dynamic Mapping:</strong> Templates will be generated using all available fields from your files. You can select which fields to include in each template during configuration.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1674,19 +1210,22 @@ const EnterpriseDataMappingApp = () => {
               <div>
                 <h3 className="text-lg font-semibold mb-2">Ready to Process</h3>
                 <p className="text-gray-600">
-                  Configure template field mappings and process your data files.
+                  {detectedSystem ? 
+                    `${systemPatterns[detectedSystem]?.name} system detected. Dynamic field mapping and template generation ready.` :
+                    'The system will automatically detect your data format, cross-reference commission and order data, and generate templates with all available fields.'
+                  }
                 </p>
               </div>
               <div className="flex space-x-3">
                 <button
                   onClick={() => {
-                    initializeTemplateMappings();
+                    initializeTemplateConfig();
                     setShowTemplateConfig(true);
                   }}
                   className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center"
                 >
                   <Settings className="mr-2" size={16} />
-                  Configure Mappings
+                  Configure Templates
                 </button>
                 <button
                   onClick={processFiles}
@@ -1706,6 +1245,56 @@ const EnterpriseDataMappingApp = () => {
                   )}
                 </button>
               </div>
+            </div>
+            
+            {/* Template Configuration Summary */}
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+              <h4 className="font-medium text-gray-900 mb-2">Export Configuration:</h4>
+              <div className="grid grid-cols-4 gap-4 text-sm">
+                {Object.entries(templateDefinitions).map(([templateType, definition]) => {
+                  const config = templateConfig[templateType];
+                  const selectedCount = config ? Object.values(config.fields).filter(f => f.selected).length : 0;
+                  const Icon = definition.icon;
+                  
+                  return (
+                    <div key={templateType} className={`flex items-center ${
+                      config?.enabled ? 'text-gray-900' : 'text-gray-400'
+                    }`}>
+                      <Icon size={16} className="mr-2" />
+                      <span>
+                        {definition.name}: {config?.enabled ? `${selectedCount} fields` : 'Disabled'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {/* File Status Display */}
+              {(files.commissions || files.orders) && (
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <h5 className="font-medium text-gray-700 mb-2">Uploaded Files & Available Fields:</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
+                    {files.commissions && (
+                      <div className="flex items-center text-blue-600">
+                        <FileText size={12} className="mr-1" />
+                        <span>Commission: {files.commissions.name} ({fileFields.commissions.length} fields)</span>
+                      </div>
+                    )}
+                    {files.orders && (
+                      <div className="flex items-center text-green-600">
+                        <ShoppingCart size={12} className="mr-1" />
+                        <span>Orders: {files.orders.name} ({fileFields.orders.length} fields)</span>
+                      </div>
+                    )}
+                    {detectedSystem && (
+                      <div className={`flex items-center ${getSystemColorClasses(detectedSystem).text}`}>
+                        <Zap size={12} className="mr-1" />
+                        <span>System: {systemPatterns[detectedSystem]?.name} (Auto-detected)</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1738,21 +1327,29 @@ const EnterpriseDataMappingApp = () => {
             {/* Statistics */}
             <div className="bg-white rounded-lg shadow-lg p-6">
               <h3 className="text-lg font-semibold mb-4">Processing Results</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{results.stats.totalRecords}</div>
-                  <div className="text-sm text-gray-600">Cross-Referenced Records</div>
+                  <div className="text-2xl font-bold text-blue-600">{results.stats.totalCustomers}</div>
+                  <div className="text-sm text-gray-600">Customers</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{results.stats.totalGenerated}</div>
-                  <div className="text-sm text-gray-600">Template Records Generated</div>
+                  <div className="text-2xl font-bold text-green-600">{results.stats.totalLocations}</div>
+                  <div className="text-sm text-gray-600">Locations</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-purple-600">{results.stats.commissionFields}</div>
+                  <div className="text-2xl font-bold text-purple-600">{results.stats.totalOrders}</div>
+                  <div className="text-sm text-gray-600">Orders</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-orange-600">{results.stats.totalContracts}</div>
+                  <div className="text-sm text-gray-600">Contracts</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-red-600">{results.stats.commissionFields}</div>
                   <div className="text-sm text-gray-600">Commission Fields</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-orange-600">{results.stats.orderFields}</div>
+                  <div className="text-2xl font-bold text-indigo-600">{results.stats.orderFields}</div>
                   <div className="text-sm text-gray-600">Order Fields</div>
                 </div>
               </div>
@@ -1762,52 +1359,42 @@ const EnterpriseDataMappingApp = () => {
             <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold">Export Templates</h3>
-                <div className="flex items-center space-x-3">
-                  <button
-                    onClick={() => {
-                      resetApplication();
-                      setStep(1);
-                    }}
-                    className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center text-sm"
-                  >
-                    <Upload className="mr-2" size={16} />
-                    Upload New Files
-                  </button>
-                  <button
-                    onClick={() => setShowTemplateConfig(true)}
-                    className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center text-sm"
-                  >
-                    <Settings className="mr-2" size={16} />
-                    Reconfigure Mappings
-                  </button>
-                </div>
+                <button
+                  onClick={() => setShowTemplateConfig(true)}
+                  className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center text-sm"
+                >
+                  <Settings className="mr-2" size={16} />
+                  Configure Fields
+                </button>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {Object.entries(templateRequirements).map(([templateType, template]) => {
-                  const Icon = template.icon;
-                  const colorClasses = getTemplateColorClasses(template.color);
-                  const data = results.templates[templateType] || [];
-                  const mappings = templateMappings[templateType] || {};
-                  const mappedCount = Object.values(mappings).filter(m => m.enabled && m.sourceField).length;
+                {Object.entries(templateDefinitions).map(([templateType, definition]) => {
+                  const config = templateConfig[templateType];
+                  const selectedCount = config ? Object.values(config.fields).filter(f => f.selected).length : 0;
+                  const Icon = definition.icon;
+                  const colorClasses = getTemplateColorClasses(definition.color);
+                  const data = results[templateType === 'customer' ? 'customers' : 
+                                     templateType === 'location' ? 'locations' :
+                                     templateType === 'order' ? 'orders' : 'contracts'];
                   
                   return (
                     <button
                       key={templateType}
                       onClick={() => {
-                        exportToCSV(data, `${systemPatterns[results.systemType]?.name || 'Generic'}_${templateType}_template.csv`);
+                        exportToCSV(data, `${systemPatterns[results.systemType]?.name || 'Generic'}_${templateType}_template.csv`, templateType);
                       }}
-                      disabled={!enabledTemplates[templateType] || data.length === 0}
-                      className={`p-4 rounded-lg flex flex-col items-center justify-center disabled:opacity-50 ${
-                        enabledTemplates[templateType] && data.length > 0
+                      disabled={!config?.enabled}
+                      className={`p-4 rounded-lg flex flex-col items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed ${
+                        config?.enabled 
                           ? `${colorClasses.button} text-white` 
                           : 'bg-gray-200 text-gray-500'
                       }`}
                     >
                       <Icon className="mb-2" size={20} />
-                      <span className="font-medium">{template.name}</span>
+                      <span className="font-medium">{definition.name}</span>
                       <span className="text-sm opacity-90">
-                        {mappedCount} fields mapped • {data.length} records
+                        {config?.enabled ? `${selectedCount || 'All'} fields` : 'Disabled'} • {data?.length || 0} records
                       </span>
                     </button>
                   );
@@ -1817,38 +1404,51 @@ const EnterpriseDataMappingApp = () => {
 
             {/* Preview Tables */}
             <div className="space-y-6">
-              {Object.entries(templateRequirements).map(([templateType, template]) => {
-                if (!enabledTemplates[templateType]) return null;
+              {Object.entries(templateDefinitions).map(([templateType, definition]) => {
+                const config = templateConfig[templateType];
+                if (!config?.enabled) return null;
                 
-                const data = results.templates[templateType] || [];
-                if (data.length === 0) return null;
+                const data = results[templateType === 'customer' ? 'customers' : 
+                                   templateType === 'location' ? 'locations' :
+                                   templateType === 'order' ? 'orders' : 'contracts'];
+                
+                const selectedFields = Object.entries(config.fields)
+                  .filter(([field, fieldConfig]) => fieldConfig.selected)
+                  .map(([field]) => field)
+                  .slice(0, 6); // Show first 6 selected fields in preview
+                
+                // If no fields are selected, show first 6 available fields from the data
+                const fieldsToShow = selectedFields.length > 0 ? selectedFields : Object.keys(data[0] || {}).slice(0, 6);
+                
+                const Icon = definition.icon;
+                const colorClasses = getTemplateColorClasses(definition.color);
                 
                 return (
                   <div key={templateType} className="bg-white rounded-lg shadow-lg p-6">
-                    <h3 className="text-lg font-semibold mb-4 flex items-center">
-                      <FileText className="mr-2" size={20} />
-                      {template.name} Preview
+                    <h3 className={`text-lg font-semibold mb-4 flex items-center ${colorClasses.text}`}>
+                      <Icon className="mr-2" size={20} />
+                      {definition.name} Preview
                       <span className="ml-2 text-sm font-normal text-gray-500">
-                        (Showing first 10 of {data.length} records)
+                        (Showing {fieldsToShow.length} of {Object.keys(data[0] || {}).length} available fields)
                       </span>
                     </h3>
                     <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            {Object.keys(data[0]).map(header => (
-                              <th key={header} className="px-4 py-2 text-left text-sm font-medium text-gray-500">
-                                {header}
+                      <table className="min-w-full">
+                        <thead>
+                          <tr className="bg-gray-50">
+                            {fieldsToShow.map(field => (
+                              <th key={field} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                {field}
                               </th>
                             ))}
                           </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {data.slice(0, 10).map((row, rowIndex) => (
-                            <tr key={rowIndex}>
-                              {Object.entries(row).map(([key, value]) => (
-                                <td key={key} className="px-4 py-2 text-sm text-gray-700">
-                                  {value}
+                        <tbody>
+                          {data.slice(0, 3).map((row, index) => (
+                            <tr key={index} className="border-t">
+                              {fieldsToShow.map((field, colIndex) => (
+                                <td key={colIndex} className="px-4 py-2 text-sm text-gray-900">
+                                  {String(row[field] || '').length > 30 ? String(row[field] || '').substring(0, 30) + '...' : String(row[field] || '')}
                                 </td>
                               ))}
                             </tr>
@@ -1856,10 +1456,25 @@ const EnterpriseDataMappingApp = () => {
                         </tbody>
                       </table>
                     </div>
+                    <p className="text-sm text-gray-500 mt-2">
+                      Showing first 3 rows with {selectedFields.length > 0 ? 'selected' : 'available'} fields. Download full CSV for complete data with all {Object.keys(data[0] || {}).length} fields from your uploaded files.
+                    </p>
                   </div>
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* Reset Button */}
+        {results && (
+          <div className="bg-white rounded-lg shadow-lg p-6 mt-6">
+            <button
+              onClick={resetApplication}
+              className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg"
+            >
+              Process New Files
+            </button>
           </div>
         )}
       </div>
