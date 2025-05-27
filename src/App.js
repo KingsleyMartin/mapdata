@@ -1762,13 +1762,25 @@ const EnterpriseDataMappingApp = () => {
             <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold">Export Templates</h3>
-                <button
-                  onClick={() => setShowTemplateConfig(true)}
-                  className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center text-sm"
-                >
-                  <Settings className="mr-2" size={16} />
-                  Reconfigure Mappings
-                </button>
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => {
+                      resetApplication();
+                      setStep(1);
+                    }}
+                    className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center text-sm"
+                  >
+                    <Upload className="mr-2" size={16} />
+                    Upload New Files
+                  </button>
+                  <button
+                    onClick={() => setShowTemplateConfig(true)}
+                    className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center text-sm"
+                  >
+                    <Settings className="mr-2" size={16} />
+                    Reconfigure Mappings
+                  </button>
+                </div>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
