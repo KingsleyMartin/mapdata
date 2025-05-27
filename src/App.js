@@ -1,5 +1,28 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Upload, Download, FileText, Users, MapPin, ShoppingCart, FileCheck, AlertCircle, CheckCircle, Globe, Zap, Database, Settings, ArrowRight, X } from 'lucide-react';
+
+const STORAGE_KEY = 'templateFieldMappings';
+const TEMPLATE_CONFIG_KEY = 'templateConfig';
+
+const saveToLocalStorage = (key, data) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+    return true;
+  } catch (error) {
+    console.error('Error saving to localStorage:', error);
+    return false;
+  }
+};
+
+const loadFromLocalStorage = (key) => {
+  try {
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : null;
+  } catch (error) {
+    console.error('Error loading from localStorage:', error);
+    return null;
+  }
+};
 
 const EnterpriseDataMappingApp = () => {
   // Core state management
@@ -790,21 +813,28 @@ const EnterpriseDataMappingApp = () => {
       order: true,
       contract: true
     });
+    clearSavedMappings();
   };
 
   // Update template mapping
   const updateTemplateMapping = useCallback((templateType, fieldName, sourceField, sourceFile) => {
-    setTemplateMappings(prev => ({
-      ...prev,
-      [templateType]: {
-        ...prev[templateType],
-        [fieldName]: {
-          ...prev[templateType][fieldName],
-          sourceField,
-          sourceFile
+    setTemplateMappings(prev => {
+      const newMappings = {
+        ...prev,
+        [templateType]: {
+          ...prev[templateType],
+          [fieldName]: {
+            ...prev[templateType]?.[fieldName],
+            sourceField,
+            sourceFile
+          }
         }
-      }
-    }));
+      };
+      
+      // Save to localStorage after updating
+      saveToLocalStorage(STORAGE_KEY, newMappings);
+      return newMappings;
+    });
   }, []);
 
   // Toggle field enabled state
@@ -820,6 +850,44 @@ const EnterpriseDataMappingApp = () => {
       }
     }));
   }, []);
+
+  const clearSavedMappings = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(TEMPLATE_CONFIG_KEY);
+    setTemplateMappings({});
+    setEnabledTemplates({
+      customer: true,
+      location: true,
+      order: true,
+      contract: true
+    });
+    addLog('Cleared saved template mappings', 'info');
+  }, [addLog]);
+
+  // Add this before the existing useEffect
+  const saveTemplateConfig = useCallback(() => {
+    const configToSave = {
+      mappings: templateMappings,
+      enabled: enabledTemplates
+    };
+    saveToLocalStorage(TEMPLATE_CONFIG_KEY, configToSave);
+    addLog('Template configuration saved', 'success');
+  }, [templateMappings, enabledTemplates, addLog]);
+
+  // Modify the existing useEffect to load both mappings and configuration
+  useEffect(() => {
+    const savedConfig = loadFromLocalStorage(TEMPLATE_CONFIG_KEY);
+    
+    if (savedConfig) {
+      if (savedConfig.mappings) {
+        setTemplateMappings(savedConfig.mappings);
+      }
+      if (savedConfig.enabled) {
+        setEnabledTemplates(savedConfig.enabled);
+      }
+      addLog('Loaded saved template configuration', 'info');
+    }
+  }, [addLog]);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -1499,8 +1567,18 @@ const EnterpriseDataMappingApp = () => {
 
               <div className="p-6 border-t border-gray-200 bg-gray-50 flex-shrink-0">
                 <div className="flex justify-between items-center">
-                  <div className="text-sm text-gray-600">
-                    Map your uploaded file fields to the required template fields. Required fields must be mapped for successful export.
+                  <div className="flex items-center space-x-4">
+                    <div className="text-sm text-gray-600">
+                      {loadFromLocalStorage(TEMPLATE_CONFIG_KEY) 
+                        ? 'Configuration loaded from saved settings'
+                        : 'No saved configuration'}
+                    </div>
+                    <button
+                      onClick={clearSavedMappings}
+                      className="px-3 py-1 text-sm text-red-600 hover:text-red-800 border border-red-600 rounded"
+                    >
+                      Clear Saved
+                    </button>
                   </div>
                   <div className="space-x-3">
                     <button
@@ -1511,12 +1589,13 @@ const EnterpriseDataMappingApp = () => {
                     </button>
                     <button
                       onClick={() => {
+                        saveTemplateConfig();
                         setShowTemplateConfig(false);
-                        addLog('Template field mappings configured', 'success');
+                        addLog('Template field mappings configured and saved', 'success');
                       }}
                       className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
                     >
-                      Apply Mappings
+                      Save & Apply
                     </button>
                   </div>
                 </div>
@@ -1707,7 +1786,7 @@ const EnterpriseDataMappingApp = () => {
                         exportToCSV(data, `${systemPatterns[results.systemType]?.name || 'Generic'}_${templateType}_template.csv`);
                       }}
                       disabled={!enabledTemplates[templateType] || data.length === 0}
-                      className={`p-4 rounded-lg flex flex-col items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed ${
+                      className={`p-4 rounded-lg flex flex-col items-center justify-center disabled:opacity-50 ${
                         enabledTemplates[templateType] && data.length > 0
                           ? `${colorClasses.button} text-white` 
                           : 'bg-gray-200 text-gray-500'
@@ -1732,36 +1811,32 @@ const EnterpriseDataMappingApp = () => {
                 const data = results.templates[templateType] || [];
                 if (data.length === 0) return null;
                 
-                const Icon = template.icon;
-                const colorClasses = getTemplateColorClasses(template.color);
-                const fieldsToShow = Object.keys(data[0] || {}).slice(0, 6);
-                
                 return (
                   <div key={templateType} className="bg-white rounded-lg shadow-lg p-6">
-                    <h3 className={`text-lg font-semibold mb-4 flex items-center ${colorClasses.text}`}>
-                      <Icon className="mr-2" size={20} />
+                    <h3 className="text-lg font-semibold mb-4 flex items-center">
+                      <FileText className="mr-2" size={20} />
                       {template.name} Preview
                       <span className="ml-2 text-sm font-normal text-gray-500">
-                        (Showing {fieldsToShow.length} of {Object.keys(data[0] || {}).length} fields)
+                        (Showing first 10 of {data.length} records)
                       </span>
                     </h3>
                     <div className="overflow-x-auto">
-                      <table className="min-w-full">
-                        <thead>
-                          <tr className="bg-gray-50">
-                            {fieldsToShow.map(field => (
-                              <th key={field} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                {field}
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            {Object.keys(data[0]).map(header => (
+                              <th key={header} className="px-4 py-2 text-left text-sm font-medium text-gray-500">
+                                {header}
                               </th>
                             ))}
                           </tr>
                         </thead>
-                        <tbody>
-                          {data.slice(0, 3).map((row, index) => (
-                            <tr key={index} className="border-t">
-                              {fieldsToShow.map((field, colIndex) => (
-                                <td key={colIndex} className="px-4 py-2 text-sm text-gray-900">
-                                  {String(row[field] || '').length > 30 ? String(row[field] || '').substring(0, 30) + '...' : String(row[field] || '')}
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {data.slice(0, 10).map((row, rowIndex) => (
+                            <tr key={rowIndex}>
+                              {Object.entries(row).map(([key, value]) => (
+                                <td key={key} className="px-4 py-2 text-sm text-gray-700">
+                                  {value}
                                 </td>
                               ))}
                             </tr>
@@ -1769,25 +1844,10 @@ const EnterpriseDataMappingApp = () => {
                         </tbody>
                       </table>
                     </div>
-                    <p className="text-sm text-gray-500 mt-2">
-                      Showing first 3 rows. Download full CSV for complete data with all mapped fields.
-                    </p>
                   </div>
                 );
               })}
             </div>
-          </div>
-        )}
-
-        {/* Reset Button */}
-        {results && (
-          <div className="bg-white rounded-lg shadow-lg p-6 mt-6">
-            <button
-              onClick={resetApplication}
-              className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg"
-            >
-              Process New Files
-            </button>
           </div>
         )}
       </div>
